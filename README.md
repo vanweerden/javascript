@@ -5,7 +5,10 @@ Node scripts, algorithm practice, etc.
 ### news-fetch.js 
 - uses NewsAPI to fetch news headlines and prints to the command line
 - adding -d option includes descrition of story and clickable url
-- usage: node news-fetch.js (-d) [option]
+- usage: 
+```
+node news-fetch.js (-d) [option]
+```
 - options:
   abc
   ars
@@ -19,4 +22,7 @@ Node scripts, algorithm practice, etc.
 
 ### multi-fetch.js 
 - similar to news-fetch.js, but allows up to three news sources to be chosen
-- Example usage: node multi-fetch.js abc bbc hack
+- Example usage: 
+```
+node multi-fetch.js abc bbc hack
+```
