@@ -1,5 +1,6 @@
-// Fetches headlines from newsapi and prints to command line
+// Fetches headlines from newsapi.org and prints to command line
 // Added functionality: can include up to three news sources
+// Usage:
 
 'use strict'
 const https = require('https');
@@ -18,40 +19,52 @@ const SOURCES = [
   ['wsj', 'the-wall-street-journal'],
 ];
 
+// TODO: hide this
 const API_KEY = '1aabcf84f880499295073d5b77ae6b9a';
 
-function getSources(args) {
-// Converts command args into array containing valid SOURCE strings
-  let input = [];
+// TODO: make this more elegant
+function printNews() {
+  let userInput = getCommandLineArgs();
+  let sources = getFullSourceNames(userInput);
+  let urls = buildURLsFrom(sources);
+  let json = fetchAllJSON(urls);
+}
 
-  // Grab first three command line arguments
+function getCommandLineArgs() {
+  let args = process.argv;
+  let input = [];
+  // Ignores arguments after third
   const limit = args.slice(2).length <= 3
               ? args.slice(2).length
               : 3;
 
   for (let i = 0; i < limit; i++) {
-    input.push(process.argv[i + 2]);
+    input.push(args[i + 2]);
   }
+  return input;
+}
 
-  // Validate sources, assign strings for urls, and removes invalid strings
-  let sources = input.map( arg => {
-    var sourceOK = false;
-    for (let i = 0; i < SOURCES.length; i++) {
-      if (arg == SOURCES[i][0]) {
-        return SOURCES[i][1];
-        sourceOK = true;
-        break;
-      }
-    }
-  }).filter( src => src != undefined);
-
-  if (sources.length == 0) {
+function getFullSourceNames(userInput) {
+  let sources;
+  if (userInput.length == 0) {
     sources = ['bbc-news', 'abc-news-au', 'cbc-news'];
+  } else {
+    // TODO: make this more efficient (iterates through SOURCES for each argument)
+    sources = userInput.map( (arg) => {
+      var sourceOK = false;
+      for (let i = 0; i < SOURCES.length; i++) {
+        if (arg == SOURCES[i][0]) {
+          return SOURCES[i][1];
+          sourceOK = true;
+          break;
+        }
+      }
+    }).filter( (src) => src != undefined);
   }
   return sources;
 }
 
-function makeURLs(sources) {
+function buildURLsFrom(sources) {
 // Takes array of sources strings and creates urls
   let urls = [];
   for (let src of sources) {
@@ -61,12 +74,55 @@ function makeURLs(sources) {
   return urls;
 }
 
-// Build array of urls to use in https.get() calls
-const sources = getSources(process.argv);
-const urls = makeURLs(sources);
+async function fetchAllJSON(urls) {
+  let json = [];
+  for (let i = 0; i < urls.length; i++) {
+    let result = await fetchJSONFrom(urls[i]);
+    json.push(result);
+  }
+}
 
-function printNews(json, index) {
-// Takes JSON object and prints headlines
+// TODO: refactor this. Separate fetching and printing
+function fetchJSONFrom(url) {
+  // make https get call
+  https.get(url, (res) => {
+    const { statusCode } = res;
+    const contentType = res.headers['content-type'];
+
+    let error;
+    if (statusCode !== 200) {
+      error = new Error('Request Failed.\n' +
+                        `Status Code: ${statusCode}`);
+    } else if (!/^application\/json/.test(contentType)) {
+      error = new Error('Invalid content-type.\n' +
+                      `Expected application/json but received ${contentType}`);
+    }
+    if (error) {
+      console.error(error.message);
+      res.resume();
+      return;
+    }
+
+    res.setEncoding('utf8');
+    let rawData = '';
+    res.on('data', (chunk) => {
+      rawData += chunk;
+    });
+    res.on('end', () => {
+      try {
+        const json = JSON.parse(rawData);
+        printHeadlines(json);
+      } catch (e) {
+        console.error(e.message);
+      }
+    })
+  }).on('error', (e) => {
+    console.error(e.message);
+  })
+}
+
+// TODO: make headlines into links before printing
+function printHeadlines(json) {
   const articles = json.articles;
 
   console.log(articles[0].source.name.toUpperCase());
@@ -76,28 +132,4 @@ function printNews(json, index) {
   console.log('\n');
 }
 
-const json = [];
-let count = 0;
-
-function getJSON(index) {
-// Given index of urls array, fetches JSON object and prints headlines
-  https.get(urls[index], function(res) {
-    res.pipe(bl(function (err, data) {
-      if (err) {
-        return console.error(err);
-      }
-      json[index] = JSON.parse(data.toString());
-      count++;
-
-      // Once all objects in array, print
-      if (count == urls.length) {
-        json.forEach( s => printNews(s, index) );
-      }
-    }));
-  });
-}
-
-// Cycle through urls
-for (let i = 0; i < urls.length; i++) {
-  getJSON(i);
-}
+printNews();
